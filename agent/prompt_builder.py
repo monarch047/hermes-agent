@@ -2061,26 +2061,47 @@ def _build_skills_system_prompt_inner(
         if available_tools is not None and "web_search" not in available_tools:
             _basic_tools = "terminal"
         index_lines = []
+        excluded_skills = []
+        current_chars = 0
+        MAX_SKILL_CHARS = 12000  # Approx 3k tokens
+
         for category in sorted(skills_by_category.keys()):
-            # Deduplicate and sort skills within each category
             seen = set()
             if category in demoted:
                 names = sorted({name for name, _ in skills_by_category[category]})
-                index_lines.append(f"  {category} [names only]: {', '.join(names)}")
+                cat_line = f"  {category} [names only]: {', '.join(names)}"
+                if current_chars + len(cat_line) < MAX_SKILL_CHARS:
+                    index_lines.append(cat_line)
+                    current_chars += len(cat_line)
+                else:
+                    excluded_skills.extend(names)
                 continue
+            
             cat_desc = category_descriptions.get(category, "")
-            if cat_desc:
-                index_lines.append(f"  {category}: {cat_desc}")
+            header_line = f"  {category}: {cat_desc}" if cat_desc else f"  {category}:"
+            
+            if current_chars + len(header_line) < MAX_SKILL_CHARS:
+                index_lines.append(header_line)
+                current_chars += len(header_line)
             else:
-                index_lines.append(f"  {category}:")
+                names = sorted({name for name, _ in skills_by_category[category]})
+                excluded_skills.extend(names)
+                continue
+
             for name, desc in sorted(skills_by_category[category], key=lambda x: x[0]):
                 if name in seen:
                     continue
                 seen.add(name)
-                if desc:
-                    index_lines.append(f"    - {name}: {desc}")
+                entry_line = f"    - {name}: {desc}" if desc else f"    - {name}"
+                
+                if current_chars + len(entry_line) < MAX_SKILL_CHARS:
+                    index_lines.append(entry_line)
+                    current_chars += len(entry_line)
                 else:
-                    index_lines.append(f"    - {name}")
+                    excluded_skills.append(name)
+
+        if excluded_skills:
+            index_lines.append(f"\n[The following items were excluded due to context budget limits: {', '.join(excluded_skills)}]")
 
         result = (
             "## Skills (mandatory)\n"
