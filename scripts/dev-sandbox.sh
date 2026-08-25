@@ -222,26 +222,26 @@ UPSTREAM_REPO=""
 UPSTREAM_COMMIT=""
 if [ -n "$INSTALL_REF" ]; then
   echo "[sandbox] fetching upstream $INSTALL_REF for installer/update test" >&2
-  UPSTREAM_REPO="$(mktemp -d -t hermes-sandbox-upstream.XXXXXX)"
-  git -C "$UPSTREAM_REPO" init -q
-  # Fetch the ref as given. A branch or tag name resolves on its own; a raw SHA
-  # needs the remote to allow fetching it directly, so fall back to fetching
-  # main and resolving the SHA locally (which works for any commit that is an
-  # ancestor of main -- the interesting case for "update from N versions ago").
-  #
-  # Peel to ^{commit} in both cases: an annotated tag fetches as a tag OBJECT,
-  # and using it directly fails later with "trying to write non-commit object
-  # ... to branch 'refs/heads/main'".
-  if git -C "$UPSTREAM_REPO" fetch -q "$UPSTREAM_URL" "$INSTALL_REF" 2>/dev/null; then
-    UPSTREAM_COMMIT="$(git -C "$UPSTREAM_REPO" rev-parse "FETCH_HEAD^{commit}")"
-  elif git -C "$UPSTREAM_REPO" fetch -q "$UPSTREAM_URL" refs/heads/main \
-    && UPSTREAM_COMMIT="$(git -C "$UPSTREAM_REPO" rev-parse --verify -q "$INSTALL_REF^{commit}")"; then
-    :
+  # Check local checkout first to avoid GitHub rate limits (HTTP 429) in CI.
+  # The runner clones with full history, so tags/SHAs are already available.
+  if git -C "$GIT_ROOT" rev-parse --verify -q "$INSTALL_REF^{commit}" >/dev/null 2>&1; then
+    UPSTREAM_REPO="$GIT_ROOT"
+    UPSTREAM_COMMIT="$(git -C "$GIT_ROOT" rev-parse "$INSTALL_REF^{commit}")"
+    echo "[sandbox] using local checkout for $INSTALL_REF" >&2
   else
-    rm -rf -- "$UPSTREAM_REPO"
-    echo "error: could not resolve upstream ref: $INSTALL_REF" >&2
-    echo '       Use a branch (main), a tag (v2026.7.7), or a SHA reachable from main.' >&2
-    exit 1
+    UPSTREAM_REPO="$(mktemp -d -t hermes-sandbox-upstream.XXXXXX)"
+    git -C "$UPSTREAM_REPO" init -q
+    if git -C "$UPSTREAM_REPO" fetch -q "$UPSTREAM_URL" "$INSTALL_REF" 2>/dev/null; then
+      UPSTREAM_COMMIT="$(git -C "$UPSTREAM_REPO" rev-parse "FETCH_HEAD^{commit}")"
+    elif git -C "$UPSTREAM_REPO" fetch -q "$UPSTREAM_URL" refs/heads/main \
+      && UPSTREAM_COMMIT="$(git -C "$UPSTREAM_REPO" rev-parse --verify -q "$INSTALL_REF^{commit}")"; then
+      :
+    else
+      rm -rf -- "$UPSTREAM_REPO"
+      echo "error: could not resolve upstream ref: $INSTALL_REF" >&2
+      echo '       Use a branch (main), a tag (v2026.7.7), or a SHA reachable from main.' >&2
+      exit 1
+    fi
   fi
 fi
 if [ ! -e "$SANDBOX_ROOT/root/repo/.sandbox-source" ]; then
