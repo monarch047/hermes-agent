@@ -220,6 +220,9 @@ exec bwrap \
   --setenv npm_config_cafile /work/certs/combined-ca.pem \
   --setenv npm_config_proxy http://127.0.0.1:8080 \
   --setenv npm_config_https_proxy http://127.0.0.1:8080 \
+  --setenv npm_config_engine_strict false \
+  --setenv npm_config_audit false \
+  --setenv npm_config_fund false \
   --setenv OPENSSL_CONF /work/certs/openssl.cnf \
   --setenv HTTP_PROXY http://127.0.0.1:8080 \
   --setenv HTTPS_PROXY http://127.0.0.1:8080 \
