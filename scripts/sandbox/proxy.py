@@ -41,6 +41,22 @@ def read_request(conn):
         if not part:
             return b""
         data += part
+    if b"\r\n\r\n" in data:
+        headers, _, rest = data.partition(b"\r\n\r\n")
+        content_length = 0
+        for line in headers.split(b"\r\n"):
+            if line.lower().startswith(b"content-length:"):
+                try:
+                    content_length = int(line.split(b":", 1)[1].strip())
+                except ValueError:
+                    content_length = 0
+        needed = content_length - len(rest)
+        while needed > 0 and len(data) < MAX_REQUEST_BYTES:
+            part = conn.recv(min(4096, needed))
+            if not part:
+                break
+            data += part
+            needed -= len(part)
     return data
 
 
