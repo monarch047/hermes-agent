@@ -144,10 +144,22 @@ def close_request(request, target=None):
 
 def relay(source, destination):
     while True:
-        chunk = source.recv(MAX_REQUEST_BYTES)
-        if not chunk:
-            return
-        destination.sendall(chunk)
+        try:
+            chunk = source.recv(MAX_REQUEST_BYTES)
+            if not chunk:
+                break
+            destination.sendall(chunk)
+        except Exception:
+            break
+
+
+def tunnel_passthrough(conn, host, port):
+    conn.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+    with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
+        t = threading.Thread(target=relay, args=(upstream, conn), daemon=True)
+        t.start()
+        relay(conn, upstream)
+        t.join(timeout=1.0)
 
 
 def forward_https(conn, host, port, request):
@@ -172,6 +184,12 @@ def handle_connect(conn, target):
     """Intercept a CONNECT tunnel, terminating TLS with a minted cert."""
     host, _, port_text = target.rpartition(':')
     port = int(port_text or '443')
+    # If this host has no fixture directory under ROOT, pass the raw TLS connection
+    # through directly to avoid breaking HTTP/2 multiplexing and pipelined requests (e.g. npm/pip).
+    if not (ROOT / host).exists():
+        tunnel_passthrough(conn, host, port)
+        return
+
     conn.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
     cert, key = cert_for(host)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
