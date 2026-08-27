@@ -176,7 +176,9 @@ def forward_stream(src, dst):
 
 def tunnel_passthrough(conn, host, port):
     try:
+        conn.settimeout(None)
         with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
+            upstream.settimeout(None)
             conn.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
             t1 = threading.Thread(target=forward_stream, args=(upstream, conn), daemon=True)
             t2 = threading.Thread(target=forward_stream, args=(conn, upstream), daemon=True)
@@ -190,7 +192,9 @@ def tunnel_passthrough(conn, host, port):
 
 def forward_https(conn, host, port, request):
     context = ssl.create_default_context(cafile=str(REAL_CA))
+    conn.settimeout(None)
     with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as raw:
+        raw.settimeout(None)
         with context.wrap_socket(raw, server_hostname=host) as upstream:
             upstream.sendall(close_request(request))
             forward_stream(upstream, conn)
@@ -201,7 +205,9 @@ def forward_http(conn, host, port, request, target):
     path = parsed.path or '/'
     if parsed.query:
         path += f'?{parsed.query}'
+    conn.settimeout(None)
     with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
+        upstream.settimeout(None)
         upstream.sendall(close_request(request, path))
         forward_stream(upstream, conn)
 
