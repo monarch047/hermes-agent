@@ -2063,7 +2063,13 @@ def _build_skills_system_prompt_inner(
         index_lines = []
         excluded_skills = []
         current_chars = 0
-        MAX_SKILL_CHARS = 12000  # Approx 3k tokens
+        # Cap skill listing to ~3k tokens (12k chars) so the system prompt
+        # stays within context budget. Skills beyond the cap are listed as
+        # "excluded" so the model knows they exist but must skill_view() to
+        # load them. Trade-off: more skills = more accurate routing vs. more
+        # tokens consumed per turn. 12k chars ≈ 3k tokens (4 chars/token).
+        # Bump this if average skill description grows significantly.
+        MAX_SKILL_CHARS = 12000
 
         for category in sorted(skills_by_category.keys()):
             seen = set()

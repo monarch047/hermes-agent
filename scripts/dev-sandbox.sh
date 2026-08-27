@@ -281,8 +281,24 @@ if [ "$INSTALL_SHORTCUT" = true ]; then
   if [ -n "$INSTALL_REF" ]; then
     git -C "$UPSTREAM_REPO" show "$UPSTREAM_COMMIT:scripts/install.sh" \
       > "$SANDBOX_ROOT/root/http/hermes-agent.nousresearch.com/install.sh"
-    sed -i 's/install_node_deps() {/install_node_deps() { [ "$SKIP_BROWSER" = true ] \&\& return 0;/' \
-      "$SANDBOX_ROOT/root/http/hermes-agent.nousresearch.com/install.sh" 2>/dev/null || true
+    # Insert --skip-browser guard at the top of install_node_deps() in the
+    # historical install.sh (the modern version already has this guard, so this
+    # is a no-op on current refs). Anchored to the function's opening brace.
+    _target="$SANDBOX_ROOT/root/http/hermes-agent.nousresearch.com/install.sh"
+    if grep -qF 'install_node_deps() {' "$_target" 2>/dev/null; then
+      awk '
+        /^install_node_deps\(\) \{/ && !done {
+          print
+          print "    if [ \"$SKIP_BROWSER\" = true ]; then"
+          print "        log_info \"Skipping Node.js browser dependencies (--skip-browser)\""
+          print "        return 0"
+          print "    fi"
+          done=1
+          next
+        }
+        { print }
+      ' "$_target" > "$_target.tmp" && mv "$_target.tmp" "$_target"
+    fi
   else
     cp -a "$INSTALLER_PATH" "$SANDBOX_ROOT/root/http/hermes-agent.nousresearch.com/install.sh"
   fi

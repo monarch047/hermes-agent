@@ -158,13 +158,19 @@ def close_request(request, target=None):
     return b'\r\n'.join(lines) + separator + body
 
 
+STREAM_TIMEOUT_SECONDS = 30  # Per-chunk timeout in forward_stream to prevent slow loris
+
+
 def forward_stream(src, dst):
     try:
+        src.settimeout(STREAM_TIMEOUT_SECONDS)
         while True:
             chunk = src.recv(MAX_REQUEST_BYTES)
             if not chunk:
                 break
             dst.sendall(chunk)
+    except socket.timeout:
+        pass
     except Exception:
         pass
     finally:
