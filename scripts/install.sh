@@ -920,6 +920,12 @@ npm_supports_npmrc() {
 }
 
 check_node() {
+    if [ "$SKIP_BROWSER" = true ]; then
+        log_info "Skipping Node.js check (--skip-browser)"
+        HAS_NODE=false
+        return 0
+    fi
+
     log_info "Checking Node.js (for browser tools)..."
 
     # Repair pre-existing Hermes-managed installs where `npm install -g` lands
@@ -2402,6 +2408,11 @@ configure_browser_env_from_system_browser() {
 }
 
 install_node_deps() {
+    if [ "$SKIP_BROWSER" = true ]; then
+        log_info "Skipping Node.js browser dependencies (--skip-browser)"
+        return 0
+    fi
+
     if [ "$HAS_NODE" = false ]; then
         log_info "Skipping Node.js dependencies (Node not installed)"
         return 0
