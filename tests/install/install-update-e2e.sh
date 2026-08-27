@@ -170,11 +170,21 @@ installer_supports() {
   local ref="$1"
   local flag="$2"
   local script=""
-  script="$(git show "$ref:scripts/install.sh" 2>/dev/null)" || {
-    git fetch -q --depth 1 "$UPSTREAM_URL" "$ref" 2>/dev/null || return 1
-    script="$(git show FETCH_HEAD:scripts/install.sh 2>/dev/null)" || return 1
-  }
-  [[ "$script" == *"$flag"* ]]
+  if [ -n "$ref" ]; then
+    script="$(git show "$ref:scripts/install.sh" 2>/dev/null || true)"
+    if [ -z "$script" ]; then
+      git fetch -q --depth 1 "$UPSTREAM_URL" "refs/tags/$ref:refs/tags/$ref" 2>/dev/null || \
+      git fetch -q --depth 1 "$UPSTREAM_URL" "$ref" 2>/dev/null || true
+      script="$(git show "$ref:scripts/install.sh" 2>/dev/null || git show FETCH_HEAD:scripts/install.sh 2>/dev/null || true)"
+    fi
+  else
+    script="$(git show HEAD:scripts/install.sh 2>/dev/null || true)"
+  fi
+  if [ -n "$script" ]; then
+    [[ "$script" == *"$flag"* ]]
+  else
+    [[ "$(git show HEAD:scripts/install.sh 2>/dev/null || true)" == *"$flag"* ]]
+  fi
 }
 
 # Run the real install one-liner inside the sandbox. `ref` non-empty installs
