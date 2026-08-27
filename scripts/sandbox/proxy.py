@@ -142,24 +142,32 @@ def close_request(request, target=None):
     return b'\r\n'.join(lines) + separator + body
 
 
-def relay(source, destination):
-    while True:
-        try:
-            chunk = source.recv(MAX_REQUEST_BYTES)
+def forward_stream(src, dst):
+    try:
+        while True:
+            chunk = src.recv(MAX_REQUEST_BYTES)
             if not chunk:
                 break
-            destination.sendall(chunk)
+            dst.sendall(chunk)
+    except Exception:
+        pass
+    finally:
+        try:
+            dst.shutdown(socket.SHUT_WR)
         except Exception:
-            break
+            pass
 
 
 def tunnel_passthrough(conn, host, port):
-    conn.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
-    with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
-        t = threading.Thread(target=relay, args=(upstream, conn), daemon=True)
-        t.start()
-        relay(conn, upstream)
-        t.join(timeout=1.0)
+    try:
+        with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
+            conn.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+            t = threading.Thread(target=forward_stream, args=(upstream, conn), daemon=True)
+            t.start()
+            forward_stream(conn, upstream)
+            t.join(timeout=5.0)
+    except Exception as err:
+        pass
 
 
 def forward_https(conn, host, port, request):
@@ -167,7 +175,7 @@ def forward_https(conn, host, port, request):
     with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as raw:
         with context.wrap_socket(raw, server_hostname=host) as upstream:
             upstream.sendall(close_request(request))
-            relay(upstream, conn)
+            forward_stream(upstream, conn)
 
 
 def forward_http(conn, host, port, request, target):
@@ -177,7 +185,7 @@ def forward_http(conn, host, port, request, target):
         path += f'?{parsed.query}'
     with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
         upstream.sendall(close_request(request, path))
-        relay(upstream, conn)
+        forward_stream(upstream, conn)
 
 
 def handle_connect(conn, target):
