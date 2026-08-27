@@ -178,10 +178,12 @@ def tunnel_passthrough(conn, host, port):
     try:
         with socket.create_connection((host, port), timeout=UPSTREAM_TIMEOUT_SECONDS) as upstream:
             conn.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
-            t = threading.Thread(target=forward_stream, args=(upstream, conn), daemon=True)
-            t.start()
-            forward_stream(conn, upstream)
-            t.join(timeout=5.0)
+            t1 = threading.Thread(target=forward_stream, args=(upstream, conn), daemon=True)
+            t2 = threading.Thread(target=forward_stream, args=(conn, upstream), daemon=True)
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
     except Exception as err:
         pass
 
